@@ -21,6 +21,7 @@ const FIELDS = {
   hold: [['s', '秒', 'numeric']],
   time: [['min', '分', 'decimal'], ['km', 'km', 'decimal'], ['kcal', 'kcal', 'numeric']],
 };
+const APP_VERSION = '2026.10.03-4';
 const KEY = 'gymlog.v1';
 const TKEY = 'gymlog.timer';
 const WD = '日月火水木金土';
@@ -826,6 +827,13 @@ function viewSettings() {
       </div>
       <button class="btn danger block" style="margin-top:10px" data-a="wipe">すべてのデータを削除</button>
     </div>
+    <h2>アプリ</h2>
+    <div class="card">
+      <div class="row"><span class="grow">バージョン</span><span class="sub">${APP_VERSION}</span></div>
+      <button class="btn block" style="margin-top:10px" data-a="check-update">更新を確認</button>
+      <button class="btn ghost block" style="margin-top:8px" data-a="do-update">強制的に読み込み直す</button>
+      <p class="sub small" style="margin:8px 2px 0">記録は消えません。</p>
+    </div>
     <p class="sub small" style="text-align:center;margin:20px 0 0">マシン一覧の出典：<a href="https://www.kongou-fitness.com/product/" target="_blank" rel="noopener" style="text-decoration:underline">KONGOU 製品一覧</a>（${KONGOU.length}機種）</p>
   `);
 }
@@ -1153,4 +1161,40 @@ document.addEventListener('contextmenu', (e) => { if (e.target.closest('[data-pe
 if (T) buildTimer();
 route();
 
-if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js');
+/* ---------- 更新チェック ----------
+   iPhoneのホーム画面アプリは閉じても裏で生きていて再読み込みされないので、
+   開くたび（画面に戻るたび）に version.json を見て、新しければ更新バナーを出す */
+let swReg = null;
+if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((r) => (swReg = r)).catch(() => {});
+}
+let lastCheck = 0;
+async function checkUpdate(force) {
+  if (!force && Date.now() - lastCheck < 30000) return;
+  lastCheck = Date.now();
+  try {
+    const r = await fetch(`version.json?t=${Date.now()}`, { cache: 'no-store' });
+    const { v } = await r.json();
+    if (v && v !== APP_VERSION) showUpdate(v);
+    else if (force) toast('最新版です（' + APP_VERSION + '）');
+  } catch { if (force) toast('オフラインのため確認できませんでした'); }
+}
+function showUpdate(v) {
+  const b = $('#update');
+  b.innerHTML = `<span class="grow">新しいバージョンがあります</span><button class="btn sm pri" data-a="do-update">更新する</button>`;
+  b.hidden = false;
+  b.dataset.v = v;
+}
+async function doUpdate() {
+  save(true);
+  try { await swReg?.update(); } catch {}
+  try { for (const k of await caches.keys()) if (k !== 'gymlog-img') await caches.delete(k); } catch {}
+  location.replace(location.pathname + '?u=' + Date.now() + location.hash);
+}
+A['do-update'] = () => doUpdate();
+A['check-update'] = () => checkUpdate(true);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) checkUpdate(); });
+window.addEventListener('pageshow', () => checkUpdate());
+// 更新後のURLの ?u= を消す
+if (location.search.includes('u=')) history.replaceState(history.state, '', location.pathname + location.hash);
+checkUpdate();
