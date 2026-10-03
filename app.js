@@ -1,5 +1,6 @@
 import { KONGOU } from './kongou.js';
 import { GENERAL } from './exercises.js';
+import { MUSCLES, musclesOf, bodyHeat, HEAT, level } from './muscles.js';
 
 /* ---------- 定数 ---------- */
 const PARTS = {
@@ -97,7 +98,7 @@ function buildEx() {
 buildEx();
 const ex = (id) => EX.get(id) || { id, name: '（削除された種目）', parts: ['multi'], kind: 'weight', src: 'custom' };
 const thumb = (e, cls = 'thumb') => e.thumb
-  ? `<img class="${cls}" src="${esc(e.thumb)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'${cls} ph',innerHTML:'${icon.dumbbell.replace(/"/g, '&quot;')}'}))">`
+  ? `<img class="${cls}" data-peek="${esc(e.id)}" draggable="false" src="${esc(e.thumb)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'${cls} ph',innerHTML:'${icon.dumbbell.replace(/"/g, '&quot;')}'}))">`
   : `<div class="${cls} ph">${icon.dumbbell}</div>`;
 
 /* ---------- セット計算 ---------- */
@@ -119,6 +120,29 @@ const dayParts = (d) => {
   for (const e of dayEntries(d)) if (validSets(e).length) ex(e.ex).parts.forEach((p) => set.add(p));
   return PART_ORDER.filter((p) => set.has(p));
 };
+
+// 筋肉ごとのセット数（メイン1・サブは割合で加算）と有酸素の分数
+function muscleVals(dates) {
+  const vals = {};
+  let cardio = 0;
+  for (const d of dates) for (const e of dayEntries(d)) {
+    const x = ex(e.ex), ws = workSets(e);
+    if (x.kind === 'time') { cardio += ws.reduce((a, s) => a + num(s.min), 0); continue; }
+    for (const [m, w] of Object.entries(musclesOf(x))) vals[m] = (vals[m] || 0) + ws.length * w;
+  }
+  return { vals, cardio };
+}
+const HEAT_TH = { 1: [3, 6, 10], 7: [4, 10, 16], 30: [12, 30, 50] };
+function heatHtml(dates, th) {
+  const { vals, cardio } = muscleVals(dates);
+  const top = Object.entries(vals).filter(([, v]) => v >= 0.5).sort((a, b) => b[1] - a[1]);
+  if (!top.length && !cardio) return '<div class="empty" style="padding:12px">この期間の記録がありません</div>';
+  return `${bodyHeat(vals, th)}
+    <div class="heat-scale"><span>少</span>${HEAT.slice(1).map((c) => `<i style="background:${c}"></i>`).join('')}<span>多</span></div>
+    <div class="heat-top">${top.map(([m, v]) => `<span class="hchip"><i style="background:${HEAT[level(v, th)]}"></i>${MUSCLES[m]}<b>${f2(Math.round(v * 10) / 10)}</b></span>`).join('')}${cardio ? `<span class="hchip"><i style="background:var(--cardio)"></i>有酸素<b>${f2(cardio)}分</b></span>` : ''}</div>
+    <div class="sub small" style="text-align:center;margin-top:6px">数字はセット数（補助で使われる筋肉は0.3〜0.7セットで計算）</div>`;
+}
+const dayHeat = (date) => (dayValid(date) ? `<div class="card heat"><div class="row" style="margin-bottom:4px"><b class="grow">${date === today() ? '今日' : 'この日'}鍛えた部位</b><span class="sub small">セット数</span></div>${heatHtml([date], HEAT_TH[1])}</div>` : '');
 
 function setText(kind, s) {
   if (kind === 'weight') return `${f2(num(s.w))}kg×${num(s.r)}`;
@@ -180,7 +204,7 @@ function newEntry(id, date, target) {
 }
 
 /* ---------- ルーティング ---------- */
-const CUR = { month: today().slice(0, 7), metric: null, range: 'all' };
+const CUR = { month: today().slice(0, 7), metric: null, range: 'all', heat: 7 };
 function route() {
   const h = location.hash.replace(/^#\/?/, '');
   const [r, ...rest] = h.split('/');
@@ -300,6 +324,7 @@ function viewDay(date) {
   const entries = o?.entries || [];
   view(`
     <div class="day-sum" id="day-sum">${daySumHtml(date)}</div>
+    <div id="day-heat">${dayHeat(date)}</div>
     <div id="entries">${entries.map((e, i) => entryHtml(e, i, date)).join('')}</div>
     <button class="btn pri block" data-a="pick-day">${icon.plus}種目を追加</button>
     <div class="btns" style="margin-top:8px">
@@ -405,6 +430,7 @@ function pickerShell() {
     <div class="sb" id="pk-sb">
       <div class="pk-search">
         ${PK.mode === 'fav' ? '<div class="sub small" style="margin-bottom:8px">通っているジムにあるマシンに★を付けると、種目追加のときに「★マイジム」で絞り込めます。</div>' : ''}
+        <div class="sub small" style="margin:-2px 2px 6px">マシン画像は長押しで拡大</div>
         <input class="f" id="pk-q" type="search" placeholder="種目・マシン名・型番で検索" autocomplete="off" value="${esc(PK.q)}">
         <div class="seg" style="margin-top:8px">${srcs.map(([k, l]) => `<button class="${PK.src === k ? 'on' : ''}" data-a="pk-src" data-v="${k}">${l}</button>`).join('')}</div>
         <div class="chips" id="pk-parts"></div>
@@ -572,6 +598,11 @@ function viewStats() {
       <div><b>${days.length}</b><span>総トレ日数</span></div>
       <div><b>${days.filter((d) => d >= from).length}</b><span>直近30日</span></div>
       <div><b>${streak}</b><span>連続週</span></div>
+    </div>
+    <h2>部位ヒートマップ</h2>
+    <div class="card heat">
+      <div class="seg" style="margin-bottom:8px">${[[1, '今日'], [7, '7日'], [30, '30日']].map(([k, l]) => `<button class="${CUR.heat === k ? 'on' : ''}" data-a="heat-range" data-v="${k}">${l}</button>`).join('')}</div>
+      ${heatHtml(Array.from({ length: CUR.heat }, (_, i) => addDays(t, -i)), HEAT_TH[CUR.heat])}
     </div>
     <h2>部位別セット数（直近30日）</h2>
     <div class="card bars">
@@ -989,6 +1020,7 @@ const A = {
   // 推移
   metric: (el) => { CUR.metric = el.dataset.v; route(); },
   range: (el) => { CUR.range = el.dataset.v; route(); },
+  'heat-range': (el) => { CUR.heat = +el.dataset.v; route(); },
 
   // 設定
   toggle: (el) => { S.settings[el.dataset.k] = !S.settings[el.dataset.k]; save(); viewSettings(); if (el.dataset.k === 'sound') unlockAudio(); },
@@ -1008,7 +1040,7 @@ const A = {
 
 function machineInfo(id) {
   const x = ex(id);
-  const big = x.thumb ? `<img class="machine-big" src="${esc(x.thumb)}" alt="" referrerpolicy="no-referrer">` : '';
+  const big = x.thumb ? `<img class="machine-big" src="${esc(x.big || x.thumb)}" alt="" referrerpolicy="no-referrer">` : '';
   openSheet(`<div class="sh"><h3>${esc(x.name)}</h3><button class="btn sm" data-a="close">閉じる</button></div>
     <div class="sb">
       ${big}
@@ -1056,6 +1088,7 @@ document.addEventListener('input', (ev) => {
     }));
     $('[data-ev]', card).innerHTML = entryEvHtml(e);
     $('#day-sum').innerHTML = daySumHtml(DAY);
+    $('#day-heat').innerHTML = dayHeat(DAY);
   } else if (f === 'bw' || f === 'memo') {
     dayObj(DAY, true)[f] = el.value; save();
   } else if (f === 'rt-name') { RT.name = el.value; save(); }
@@ -1087,6 +1120,35 @@ document.addEventListener('keydown', (ev) => {
   const i = all.indexOf(ev.target);
   if (all[i + 1]) all[i + 1].focus(); else ev.target.blur();
 });
+
+/* ---------- 長押しでマシン画像を拡大 ---------- */
+let lp = null, peeked = false, swallowClick = false;
+function peek(id) {
+  const x = ex(id);
+  const el = $('#peek');
+  el.innerHTML = `<div class="pk-card"><img src="${esc(x.big || x.thumb)}" alt="" referrerpolicy="no-referrer" draggable="false"><b>${esc(x.name)}</b><span>${x.parts.map(chip).join('')} ${esc((x.codes || []).join(' / '))}</span></div><div class="sub small" style="margin-top:12px">指を離すと閉じます</div>`;
+  el.hidden = false;
+  peeked = true;
+  navigator.vibrate?.(12);
+}
+function unpeek() { $('#peek').hidden = true; peeked = false; }
+document.addEventListener('pointerdown', (e) => {
+  const t = e.target.closest('[data-peek]');
+  if (!t) return;
+  lp = { x: e.clientX, y: e.clientY, timer: setTimeout(() => { swallowClick = true; peek(t.dataset.peek); }, 380) };
+});
+document.addEventListener('pointermove', (e) => {
+  if (lp && !peeked && Math.hypot(e.clientX - lp.x, e.clientY - lp.y) > 10) { clearTimeout(lp.timer); lp = null; }
+});
+const endPress = (e) => {
+  if (lp) { clearTimeout(lp.timer); lp = null; }
+  if (peeked && e.type === 'pointerup') unpeek();
+};
+document.addEventListener('pointerup', endPress);
+document.addEventListener('pointercancel', endPress);
+$('#peek').addEventListener('click', unpeek);
+document.addEventListener('click', (e) => { if (swallowClick) { swallowClick = false; e.stopPropagation(); e.preventDefault(); } }, true);
+document.addEventListener('contextmenu', (e) => { if (e.target.closest('[data-peek]')) e.preventDefault(); });
 
 if (T) buildTimer();
 route();

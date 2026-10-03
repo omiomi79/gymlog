@@ -265,3 +265,27 @@ label.lb { display: block; font-size: 12px; color: var(--sub); margin: 10px 2px 
 .rt-item input { width: 56px; text-align: center; padding: 8px 4px; }
 .mini-ib { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 9px; color: var(--sub); background: var(--card2); flex: none; }
 .mini-ib svg { width: 18px; height: 18px; }
+
+/* 長押し拡大 */
+[data-peek], .pk-item, .entry .eh { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+#peek {
+  position: fixed; inset: 0; z-index: 70; background: #000c; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 16px; animation: fade .12s;
+}
+#peek[hidden] { display: none; }
+#peek .pk-card { width: 100%; max-width: 520px; background: #fff; border-radius: 18px; overflow: hidden; animation: zoom .18s cubic-bezier(.2,.8,.2,1); }
+#peek img { width: 100%; max-height: 62dvh; object-fit: contain; display: block; background: #fff; }
+#peek b { display: block; color: #111; font-size: 17px; padding: 10px 14px 2px; }
+#peek .pk-card > span { display: flex; gap: 6px; align-items: center; padding: 0 14px 12px; color: #666; font-size: 12px; flex-wrap: wrap; }
+@keyframes zoom { from { transform: scale(.6); opacity: 0; } }
+
+/* ヒートマップ */
+.bodies { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; max-width: 260px; margin: 0 auto; }
+.body { width: 100%; height: auto; display: block; stroke: none; stroke-width: 0; }
+.heat-scale { display: flex; align-items: center; justify-content: center; gap: 3px; font-size: 11px; color: var(--sub); margin: 6px 0 8px; }
+.heat-scale i { width: 22px; height: 8px; border-radius: 3px; display: block; }
+.heat-scale span { margin: 0 4px; }
+.heat-top { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+.hchip { display: inline-flex; align-items: center; gap: 5px; background: var(--card2); border-radius: 999px; padding: 3px 10px 3px 6px; font-size: 12px; }
+.hchip i { width: 10px; height: 10px; border-radius: 50%; display: block; }
+.hchip b { font-variant-numeric: tabular-nums; }

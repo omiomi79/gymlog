@@ -1,6 +1,6 @@
 // オフラインでも開けるようにアプリ本体をキャッシュ。マシン画像は見たものだけ保存。
-const V = 'gymlog-v1';
-const SHELL = ['./', 'index.html', 'style.css', 'app.js', 'kongou.js', 'exercises.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/apple-touch-icon.png'];
+const V = 'gymlog-v2';
+const SHELL = ['./', 'index.html', 'style.css', 'app.js', 'kongou.js', 'exercises.js', 'muscles.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/apple-touch-icon.png'];
 self.addEventListener('install', (e) => { e.waitUntil(caches.open(V).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', (e) => {
   e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== V && k !== 'gymlog-img').map((k) => caches.delete(k)))).then(() => self.clients.claim()));
